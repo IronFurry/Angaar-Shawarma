@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { createOrder,getOrderById } from '../api/orderApi';
+import { createOrder, getOrderById } from '../api/orderApi';
 import logo from "../assets/logo.png";
 
 // ── Constants ─────────────────────────────────────────────────────────────────
@@ -159,23 +159,23 @@ const OrderTracker = ({ orderId, billNo, onNewOrder }) => {
 
   const [downloading, setDownloading] = useState(false);
 
-  useEffect(()=>{
-    const fetchOrder = async()=>{
-      try{
+  useEffect(() => {
+    const fetchOrder = async () => {
+      try {
         const result = await getOrderById(orderId)
 
-        if(result.success){
+        if (result.success) {
           setOrder(result.data)
         }
       }
-      catch(error){
+      catch (error) {
         console.error(error)
       }
     }
     fetchOrder();
-    const interval = setInterval(fetchOrder,60000);
-    return ()=> clearInterval(interval)
-  },[orderId])
+    const interval = setInterval(fetchOrder, 15000);
+    return () => clearInterval(interval)
+  }, [orderId])
   // // Poll localStorage every 5 s for status updates from staff
   // useEffect(() => {
   //   const id = setInterval(() => {
@@ -548,7 +548,7 @@ const OrderTab = ({ cart, removeFromCart, updateQuantity, clearCart, goToMenu, t
       return;
     }
     if (found.branch && found.branch !== 'All') {
-      const shortBranch = selectedBranch.split(' ')[0]; 
+      const shortBranch = selectedBranch.split(' ')[0];
       const couponBranch = found.branch.split(' ')[0];
       if (!shortBranch.toLowerCase().includes(couponBranch.toLowerCase()) && !couponBranch.toLowerCase().includes(shortBranch.toLowerCase())) {
         setCouponError(`Valid only for ${found.branch} branch.`);
@@ -630,20 +630,20 @@ const OrderTab = ({ cart, removeFromCart, updateQuantity, clearCart, goToMenu, t
 
       clearCart();
     }
-      // Order creation failed — show the API's message if available
-      setOrderError(result?.message || "Failed to place order. Please try again.");
+    // Order creation failed — show the API's message if available
+    setOrderError(result?.message || "Failed to place order. Please try again.");
   };
 
   // ── If order was placed, show tracker ──────────────────────────────────────
   const activeOrderToTrack = trackingOrderId || placedOrderId;
-  
+
   if (activeOrderToTrack) {
     return (
       <section id="order-dashboard" className="reveal visible">
         <OrderTracker
           orderId={activeOrderToTrack}
           billNo={placedBillNo} // note: this might be null if opened from widget, but tracker fetches the order anyway
-          onNewOrder={() => { setPlacedOrderId(null); if(clearTracking) clearTracking(); goToMenu(); }}
+          onNewOrder={() => { setPlacedOrderId(null); if (clearTracking) clearTracking(); goToMenu(); }}
         />
       </section>
     );
