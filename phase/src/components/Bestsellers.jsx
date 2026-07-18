@@ -111,28 +111,34 @@ const Bestsellers = ({ addToCart }) => {
             return;
           }
         }
-        throw new Error('Insufficient bestseller data from database');
+        // If we reach here, we successfully connected but database has insufficient data.
+        // Silently use the fallback without throwing a console.warn error.
+        useStaticFallback();
       } catch (err) {
-        console.warn('API Bestsellers load failed, falling back to static list:', err.message);
-        try {
-          const fallback = FALLBACK_IDS.map(({ id, category, badge }) => {
-            const list = menuData[category];
-            if (!list) return null;
-            const found = list.find(item => Number(item.id) === Number(id));
-            if (!found) return null;
-            return {
-              ...found,
-              badge,
-            };
-          }).filter(Boolean);
-          setBestsellerItems(fallback);
-        } catch (fbErr) {
-          console.error('Critical fallback error:', fbErr);
-        }
-      } finally {
-        setLoading(false);
+        console.warn('API Bestsellers fetch failed, falling back to static list:', err.message);
+        useStaticFallback();
       }
     };
+
+    const useStaticFallback = () => {
+      try {
+        const fallback = FALLBACK_IDS.map(({ id, category, badge }) => {
+          const list = menuData[category];
+          if (!list) return null;
+          const found = list.find(item => Number(item.id) === Number(id));
+          if (!found) return null;
+          return {
+            ...found,
+            badge,
+          };
+        }).filter(Boolean);
+        setBestsellerItems(fallback);
+      } catch (fbErr) {
+        console.error('Critical fallback error:', fbErr);
+      }
+      setLoading(false);
+    };
+
     loadBestsellers();
   }, []);
 
