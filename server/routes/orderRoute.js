@@ -29,12 +29,16 @@ const {
 // ── Public ────────────────────────────────────────────────────────────────────
 router.post("/",           createOrder);    // customers place orders
 router.get("/bestsellers", getBestsellers); // public bestseller sync
-router.get("/:id",         getOrderById);   // customer order tracking
+// NOTE: /active and / must be registered BEFORE /:id — Express matches top-to-bottom
+// and /:id would capture "active" as a param ID if placed first.
 
 // ── Protected (requires auth) ────────────────────────────────────────────────
 // GET /active contains full customer PII — must not be public
 router.get("/active",       authenticate, authorize("owner", "staff"), getActiveOrders);
 router.get("/",             authenticate, authorize("owner", "staff"), getOrder);
+
+// Wildcard param routes last — must come after all literal paths
+router.get("/:id",         getOrderById);   // customer order tracking
 router.patch("/:id/status", authenticate, authorize("owner", "staff"), updateOrderStatus);
 router.delete("/:id",       authenticate, authorize("owner", "staff"), deleteOrder);
 

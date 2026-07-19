@@ -2,7 +2,11 @@ import React, { useState, useEffect } from 'react';
 import { menuData } from '../utils/menuData';
 import { getBestsellers } from '../api/orderApi';
 
-// Flatten all menu items for easy lookup by name
+// ── Constants ─────────────────────────────────────────────────────────────────
+
+const BADGES = ['Bestseller', 'Hot Pick', 'Fan Fave', 'Signature'];
+
+// Flat list of every menu item for name-based DB lookup
 const ALL_MENU_ITEMS = [
   ...menuData.shawarma,
   ...menuData.platter,
@@ -10,15 +14,38 @@ const ALL_MENU_ITEMS = [
   ...menuData.mocktail,
 ];
 
-// Default fallback bestsellers (hardcoded top picks)
-const FALLBACK_IDS = [
-  { id: 1, category: 'shawarma', badge: 'Bestseller' },
-  { id: 2, category: 'shawarma', badge: 'Hot Pick' },
-  { id: 5, category: 'shawarma', badge: 'Fan Fave' },
-  { id: 10, category: 'shawarma', badge: 'Signature' },
-];
+// Static fallback: items flagged isBestseller:true in menuData, capped at 4.
+// Driven by menuData itself — if you rename/add items there, this stays correct.
+const STATIC_FALLBACK = ALL_MENU_ITEMS
+  .filter(item => item.isBestseller)
+  .slice(0, 4)
+  .map((item, idx) => ({ ...item, badge: BADGES[idx] || 'Popular' }));
 
-const BADGES = ['Bestseller', 'Hot Pick', 'Fan Fave', 'Signature'];
+// ── Module-level helpers ───────────────────────────────────────────────────────
+
+/**
+ * Fetch live bestsellers from the DB and enrich them with full menu item data.
+ * Returns an array of enriched items (may be empty if the DB has < 2 results).
+ */
+async function fetchLiveBestsellers() {
+  const res = await getBestsellers();
+  if (!res?.success || !Array.isArray(res.data) || res.data.length < 2) return [];
+
+  const enriched = res.data
+    .map((dbItem, idx) => {
+      const menuItem = ALL_MENU_ITEMS.find(
+        m => m.name.toLowerCase() === dbItem.name.toLowerCase()
+      );
+      if (!menuItem) return null;
+      return { ...menuItem, badge: BADGES[idx] || 'Popular', totalSold: dbItem.totalSold };
+    })
+    .filter(Boolean)
+    .slice(0, 4);
+
+  return enriched.length >= 2 ? enriched : [];
+}
+
+// ── Sub-components ─────────────────────────────────────────────────────────────
 
 const StarIcon = ({ size = 16, color = '#ffd700' }) => (
   <svg width={size} height={size} viewBox="0 0 24 24" fill="currentColor" style={{ color, display: 'inline-block', verticalAlign: 'middle' }}>
@@ -80,78 +107,39 @@ const FoodIcon = ({ emoji, size = 48 }) => {
   }
 };
 
+// ── Main component ─────────────────────────────────────────────────────────────
+
 const Bestsellers = ({ addToCart }) => {
-  const [addedItems, setAddedItems] = useState({});
+  const [addedItems, setAddedItems]       = useState({});
   const [bestsellerItems, setBestsellerItems] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading]             = useState(true);
 
   useEffect(() => {
-    const loadBestsellers = async () => {
-      try {
-        const res = await getBestsellers();
-        if (res?.success && res.data && res.data.length >= 2) {
-          const dbItems = res.data
-            .map((dbItem, idx) => {
-              const found = ALL_MENU_ITEMS.find(
-                m => m.name.toLowerCase() === dbItem.name.toLowerCase()
-              );
-              if (!found) return null;
-              return {
-                ...found,
-                badge: BADGES[idx] || 'Popular',
-                totalSold: dbItem.totalSold,
-              };
-            })
-            .filter(Boolean)
-            .slice(0, 4);
+    let cancelled = false; // guard against setting state on unmounted component
 
-          if (dbItems.length >= 2) {
-            setBestsellerItems(dbItems);
-            setLoading(false);
-            return;
-          }
-        }
-        // If we reach here, we successfully connected but database has insufficient data.
-        // Silently use the fallback without throwing a console.warn error.
-        useStaticFallback();
+    async function load() {
+      try {
+        const live = await fetchLiveBestsellers();
+        if (cancelled) return;
+        setBestsellerItems(live.length >= 2 ? live : STATIC_FALLBACK);
       } catch (err) {
-        console.warn('API Bestsellers fetch failed, falling back to static list:', err.message);
-        useStaticFallback();
+        console.warn('Bestsellers API failed, using static fallback:', err.message);
+        if (!cancelled) setBestsellerItems(STATIC_FALLBACK);
+      } finally {
+        if (!cancelled) setLoading(false);
       }
-    };
+    }
 
-    const useStaticFallback = () => {
-      try {
-        const fallback = FALLBACK_IDS.map(({ id, category, badge }) => {
-          const list = menuData[category];
-          if (!list) return null;
-          const found = list.find(item => Number(item.id) === Number(id));
-          if (!found) return null;
-          return {
-            ...found,
-            badge,
-          };
-        }).filter(Boolean);
-        setBestsellerItems(fallback);
-      } catch (fbErr) {
-        console.error('Critical fallback error:', fbErr);
-      }
-      setLoading(false);
-    };
-
-    loadBestsellers();
+    load();
+    return () => { cancelled = true; };
   }, []);
 
   const handleAdd = (item) => {
     addToCart(item);
-    setAddedItems({ ...addedItems, [item.id]: true });
+    setAddedItems(prev => ({ ...prev, [item.id]: true }));
     setTimeout(() => {
-      setAddedItems((prev) => ({ ...prev, [item.id]: false }));
+      setAddedItems(prev => ({ ...prev, [item.id]: false }));
     }, 1200);
-  };
-
-  const getBtnStyle = (id) => {
-    return addedItems[id] ? { background: '#25D366' } : {};
   };
 
   return (
@@ -193,9 +181,9 @@ const Bestsellers = ({ addToCart }) => {
                 )}
                 <div className="product-footer">
                   <div className="product-price"><span>₹</span>{String(item.price || '').replace('₹', '')}</div>
-                  <button 
-                    className="add-btn" 
-                    style={getBtnStyle(item.id)} 
+                  <button
+                    className="add-btn"
+                    style={addedItems[item.id] ? { background: '#25D366' } : {}}
                     onClick={() => handleAdd(item)}
                   >
                     {addedItems[item.id] ? '✓' : '+'}

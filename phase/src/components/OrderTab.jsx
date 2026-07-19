@@ -159,22 +159,40 @@ const OrderTracker = ({ orderId, billNo, onNewOrder }) => {
 
   const [downloading, setDownloading] = useState(false);
 
+  const [isOnline, setIsOnline] = useState(navigator.onLine);
+
   useEffect(() => {
+    const handleOnline = () => setIsOnline(true);
+    const handleOffline = () => setIsOnline(false);
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+
     const fetchOrder = async () => {
+      if (!navigator.onLine) {
+        setIsOnline(false);
+        return;
+      }
       try {
         const result = await getOrderById(orderId)
-
         if (result.success) {
           setOrder(result.data)
+          setIsOnline(true);
         }
       }
       catch (error) {
-        console.error(error)
+        console.error(error);
+        if (!navigator.onLine || error.message.includes('Failed to fetch') || error.message.includes('NetworkError')) {
+          setIsOnline(false);
+        }
       }
     }
     fetchOrder();
-    const interval = setInterval(fetchOrder, 15000);
-    return () => clearInterval(interval)
+    const interval = setInterval(fetchOrder, 10000);
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    }
   }, [orderId])
   // // Poll localStorage every 5 s for status updates from staff
   // useEffect(() => {
@@ -327,7 +345,25 @@ const OrderTracker = ({ orderId, billNo, onNewOrder }) => {
         </div>
       </div>
 
-      <p className="ot-poll-note">Status updates automatically every 5 seconds</p>
+      {!isOnline && (
+        <div style={{
+          background: 'rgba(239, 68, 68, 0.12)',
+          border: '1px solid rgba(239, 68, 68, 0.3)',
+          color: '#f87171',
+          padding: '0.65rem 0.85rem',
+          borderRadius: '8px',
+          fontSize: '0.8rem',
+          textAlign: 'center',
+          marginTop: '1rem',
+          fontWeight: 500
+        }}>
+          ⚠️ Offline: Status update paused. Reconnecting...
+        </div>
+      )}
+
+      <p className="ot-poll-note">
+        {isOnline ? "Status updates automatically every 10 seconds" : "Offline mode — will refresh once internet is back"}
+      </p>
 
       <div style={{ display: 'flex', gap: '1rem', justifyContent: 'center', marginTop: '1.5rem', flexWrap: 'wrap' }}>
         <button className="ot-new-order-btn" style={{ margin: 0 }} onClick={onNewOrder}>
@@ -603,9 +639,14 @@ const OrderTab = ({ cart, removeFromCart, updateQuantity, clearCart, goToMenu, t
       status: "Pending",
     };
 
+    if (!navigator.onLine) {
+      setOrderError("No internet connection! Please check your network and try again.");
+      return;
+    }
+
     const result = await createOrder(newOrder);
 
-    if (result.success) {
+    if (result?.success) {
       // Persist this order's _id for the "My Orders" widget in Menu
       try {
         const prev = JSON.parse(localStorage.getItem('angaar_my_orders') || '[]');
@@ -629,9 +670,10 @@ const OrderTab = ({ cart, removeFromCart, updateQuantity, clearCart, goToMenu, t
       setPlacedBillNo(result.data.billNumber);
 
       clearCart();
+      return;
     }
     // Order creation failed — show the API's message if available
-    setOrderError(result?.message || "Failed to place order. Please try again.");
+    setOrderError(result?.message || "Failed to place order. Server might be down. Please try again.");
   };
 
   // ── If order was placed, show tracker ──────────────────────────────────────
@@ -879,6 +921,23 @@ const OrderTab = ({ cart, removeFromCart, updateQuantity, clearCart, goToMenu, t
               <button type="submit" className="place-order-fire-btn" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.4rem' }}>
                 Place Order <FlameIcon />
               </button>
+
+              {/* Network or Order Error Message */}
+              {orderError && (
+                <div style={{
+                  background: 'rgba(239, 68, 68, 0.12)',
+                  border: '1px solid rgba(239, 68, 68, 0.3)',
+                  color: '#f87171',
+                  padding: '0.65rem 0.85rem',
+                  borderRadius: '8px',
+                  fontSize: '0.8rem',
+                  marginTop: '0.75rem',
+                  fontWeight: 500,
+                  textAlign: 'center',
+                }}>
+                  ⚠️ {orderError}
+                </div>
+              )}
 
               <div className="checkout-order-meta">
                 <span>Order #{billNo}</span>

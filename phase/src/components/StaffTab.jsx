@@ -297,6 +297,7 @@ const StaffTab = ({ onExit }) => {
 
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [isOnline, setIsOnline] = useState(navigator.onLine);
 
   // ── Customer Support Search state ──
   const [supportQuery, setSupportQuery] = useState('');
@@ -322,16 +323,44 @@ const StaffTab = ({ onExit }) => {
     }
   }, [targetBranchName]);
 
+  // Monitor connection status
+  useEffect(() => {
+    const handleOnline = () => {
+      setIsOnline(true);
+      refresh(true); // Sync orders immediately when coming back online
+    };
+    const handleOffline = () => {
+      setIsOnline(false);
+    };
+
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
+  }, []);
 
   const refresh = useCallback(async (silent = false) => {
+    if (!navigator.onLine) {
+      setIsOnline(false);
+      return;
+    }
     if (!silent) setLoading(true)
     try {
       const token = staffToken || sessionStorage.getItem('angaar_staff_token');
       const result = await getOrders(token)
-      if (result.success) setOrders(result.data)
+      if (result.success) {
+        setOrders(result.data);
+        setIsOnline(true);
+      }
     }
     catch (e) {
       console.error(e);
+      // If server fetch failed because of network issues
+      if (!navigator.onLine || e.message.includes('Failed to fetch') || e.message.includes('NetworkError')) {
+        setIsOnline(false);
+      }
     }
     finally {
       setLoading(false)
@@ -342,7 +371,7 @@ const StaffTab = ({ onExit }) => {
   useEffect(() => {
     const id = setInterval(() => {
       refresh(true)
-    }, 60000);
+    }, 15000); // Polling every 15 seconds to sync faster and detect silent server disconnects
     return () => clearInterval(id)
   }, [refresh])
   // ── Status advance ──
@@ -505,10 +534,46 @@ const StaffTab = ({ onExit }) => {
   // ── Main Dashboard ────────────────────────────────────────────────────────
   return (
     <section id="staff-dashboard" className="reveal visible">
+      {/* Offline Status Warning Banner */}
+      {!isOnline && (
+        <div style={{
+          background: 'linear-gradient(135deg, #ef4444, #b91c1c)',
+          color: '#fff',
+          padding: '0.85rem 1.25rem',
+          borderRadius: '12px',
+          marginBottom: '1.5rem',
+          display: 'flex',
+          alignItems: 'center',
+          gap: '0.6rem',
+          fontWeight: 700,
+          fontSize: '0.9rem',
+          boxShadow: '0 4px 12px rgba(239, 68, 68, 0.25)',
+          animation: 'pulse 1.5s infinite',
+        }}>
+          <span style={{ fontSize: '1.2rem' }}>⚠️</span>
+          <div>
+            <div>You are offline!</div>
+            <div style={{ fontWeight: 400, fontSize: '0.78rem', opacity: 0.9, marginTop: '2px' }}>
+              Connection lost. New orders placed by customers will not appear until connection is restored. Attempting to reconnect...
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Header */}
       <div className="staff-header">
         <div>
-          <div className="section-eyebrow">Staff Panel</div>
+          <div className="section-eyebrow" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+            Staff Panel
+            <span style={{
+              display: 'inline-block',
+              width: 8,
+              height: 8,
+              borderRadius: '50%',
+              background: isOnline ? '#10b981' : '#ef4444',
+              boxShadow: isOnline ? '0 0 8px #10b981' : '0 0 8px #ef4444',
+            }} />
+          </div>
           <h2 className="section-title">Order Management</h2>
           <p className="section-sub">Managing live orders for: <strong>{BRANCH_SHORT[activeBranch] || activeBranch}</strong></p>
         </div>
