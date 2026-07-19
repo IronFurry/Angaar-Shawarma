@@ -4,6 +4,9 @@ import { getBestsellers } from '../api/orderApi';
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
+// TOGGLE: Change this to true if you want live DB bestseller statistics instead of static presets
+const USE_LIVE_ANALYTICS = true;
+
 const BADGES = ['Bestseller', 'Hot Pick', 'Fan Fave', 'Signature'];
 
 // Flat list of every menu item for name-based DB lookup
@@ -14,12 +17,43 @@ const ALL_MENU_ITEMS = [
   ...menuData.mocktail,
 ];
 
-// Static fallback: items flagged isBestseller:true in menuData, capped at 4.
-// Driven by menuData itself — if you rename/add items there, this stays correct.
-const STATIC_FALLBACK = ALL_MENU_ITEMS
-  .filter(item => item.isBestseller)
-  .slice(0, 4)
-  .map((item, idx) => ({ ...item, badge: BADGES[idx] || 'Popular' }));
+// Static fallback: 4 hardcoded bestseller picks (avoiding dynamic filter dependencies)
+const STATIC_FALLBACK = [
+  {
+    id: 1,
+    emoji: '🌯',
+    name: 'Chicken Shawarma',
+    desc: 'Classic grilled chicken roll',
+    price: '₹100',
+    badge: 'Bestseller'
+  },
+  {
+    id: 2,
+    emoji: '🌯',
+    name: 'Tandoori Chicken Shawarma',
+    desc: 'Smoky tandoori masala marinade',
+    price: '₹120',
+    badge: 'Hot Pick',
+    spicy: true
+  },
+  {
+    id: 5,
+    emoji: '🧀',
+    name: 'Cheese Chicken Shawarma',
+    desc: 'Extra melted cheddar & mozzarella',
+    price: '₹120',
+    badge: 'Fan Fave'
+  },
+  {
+    id: 10,
+    emoji: '🔥',
+    name: 'Angaar Spl. Shawarma',
+    desc: 'Signature loaded fiery roll',
+    price: '₹140',
+    badge: 'Signature',
+    spicy: true
+  }
+];
 
 // ── Module-level helpers ───────────────────────────────────────────────────────
 
@@ -110,14 +144,21 @@ const FoodIcon = ({ emoji, size = 48 }) => {
 // ── Main component ─────────────────────────────────────────────────────────────
 
 const Bestsellers = ({ addToCart }) => {
-  const [addedItems, setAddedItems]       = useState({});
+  const [addedItems, setAddedItems] = useState({});
   const [bestsellerItems, setBestsellerItems] = useState([]);
-  const [loading, setLoading]             = useState(true);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    let cancelled = false; // guard against setting state on unmounted component
+    let cancelled = false;
 
     async function load() {
+      if (!USE_LIVE_ANALYTICS) {
+        setBestsellerItems(STATIC_FALLBACK);
+        setLoading(false);
+        return;
+      }
+
+      setLoading(true);
       try {
         const live = await fetchLiveBestsellers();
         if (cancelled) return;
@@ -144,7 +185,7 @@ const Bestsellers = ({ addToCart }) => {
 
   return (
     <section id="bestsellers">
-      <div className="bestsellers-header reveal">
+      <div className="bestsellers-header reveal visible">
         <div className="section-eyebrow" style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
           <StarIcon size={14} /> Most Ordered
         </div>
@@ -161,7 +202,7 @@ const Bestsellers = ({ addToCart }) => {
       ) : (
         <div className="products-grid">
           {bestsellerItems.map((item) => (
-            <div className="product-card reveal" key={item.id}>
+            <div className="product-card reveal visible" key={item.id}>
               <div className="product-badge">{item.badge}</div>
               <div className="product-img-wrap">
                 <FoodIcon emoji={item.emoji} size={48} />
@@ -174,7 +215,7 @@ const Bestsellers = ({ addToCart }) => {
               <div className="product-info">
                 <div className="product-name">{item.name}</div>
                 <div className="product-desc">{item.desc}</div>
-                {item.totalSold && (
+                {USE_LIVE_ANALYTICS && item.totalSold && (
                   <div style={{ fontSize: '0.72rem', color: 'var(--primary)', fontWeight: 600, marginBottom: '0.5rem' }}>
                     🔥 {item.totalSold} orders
                   </div>
