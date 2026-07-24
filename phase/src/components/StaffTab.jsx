@@ -259,6 +259,159 @@ const VALID_STAFF_HASHES = {
   '#staff-virar': 'Virar Outlet',
 };
 
+// ── Kitchen Prep Widget (Items to Make) ────────────────────────────────────
+const KitchenPrepWidget = ({ orders, activeBranch, filterBranch }) => {
+  const [collapsed, setCollapsed] = useState(false);
+  const [prepFilter, setPrepFilter] = useState('Active'); // 'Active' | 'Preparing' | 'Pending' | 'Confirmed'
+  const [searchTerm, setSearchTerm] = useState('');
+
+  // Filter orders by branch
+  const branchOrders = orders.filter(o => filterBranch === 'All' || o.branch === filterBranch);
+
+  const targetOrders = branchOrders.filter(o => {
+    if (prepFilter === 'Preparing') return o.status === 'Preparing';
+    if (prepFilter === 'Pending') return o.status === 'Pending';
+    if (prepFilter === 'Confirmed') return o.status === 'Confirmed';
+    // 'Active' includes Pending, Confirmed, Preparing
+    return o.status === 'Pending' || o.status === 'Confirmed' || o.status === 'Preparing';
+  });
+
+  // Aggregate item quantities
+  const prepMap = {};
+  targetOrders.forEach(order => {
+    (order.items || []).forEach(item => {
+      const key = item.name;
+      if (!prepMap[key]) {
+        prepMap[key] = {
+          name: item.name,
+          emoji: item.emoji || '🍽️',
+          totalQty: 0,
+          pendingQty: 0,
+          confirmedQty: 0,
+          preparingQty: 0,
+          orderIds: new Set(),
+        };
+      }
+      const qty = Number(item.quantity) || 1;
+      prepMap[key].totalQty += qty;
+      prepMap[key].orderIds.add(order._id);
+      if (order.status === 'Pending') prepMap[key].pendingQty += qty;
+      if (order.status === 'Confirmed') prepMap[key].confirmedQty += qty;
+      if (order.status === 'Preparing') prepMap[key].preparingQty += qty;
+    });
+  });
+
+  let itemsList = Object.values(prepMap).map(item => ({
+    ...item,
+    orderCount: item.orderIds.size,
+  })).sort((a, b) => b.totalQty - a.totalQty);
+
+  if (searchTerm.trim()) {
+    const q = searchTerm.toLowerCase();
+    itemsList = itemsList.filter(item => item.name.toLowerCase().includes(q));
+  }
+
+  const grandTotalItems = itemsList.reduce((sum, item) => sum + item.totalQty, 0);
+
+  return (
+    <div className={`kitchen-prep-widget ${collapsed ? 'collapsed' : ''}`}>
+      {/* Widget Header */}
+      <div className="kpw-header" onClick={() => setCollapsed(!collapsed)}>
+        <div className="kpw-title-group">
+          <FlameIcon size={16} color="#ff7a1a" />
+          <h4 className="kpw-title">
+            Items To Make
+            {grandTotalItems > 0 && (
+              <span className="kpw-badge">{grandTotalItems}</span>
+            )}
+          </h4>
+        </div>
+        <button
+          className="kpw-toggle-btn"
+          onClick={(e) => {
+            e.stopPropagation();
+            setCollapsed(!collapsed);
+          }}
+          title={collapsed ? 'Expand Prep Widget' : 'Minimize Widget'}
+        >
+          {collapsed ? '▲' : '▼'}
+        </button>
+      </div>
+
+      {/* Widget Body */}
+      {!collapsed && (
+        <div className="kpw-body">
+          {/* Status Filters */}
+          <div className="kpw-filters">
+            <button
+              className={`kpw-filter-tab ${prepFilter === 'Active' ? 'active' : ''}`}
+              onClick={() => setPrepFilter('Active')}
+            >
+              Active
+            </button>
+            <button
+              className={`kpw-filter-tab ${prepFilter === 'Pending' ? 'active' : ''}`}
+              onClick={() => setPrepFilter('Pending')}
+            >
+              Pending
+            </button>
+            <button
+              className={`kpw-filter-tab ${prepFilter === 'Preparing' ? 'active' : ''}`}
+              onClick={() => setPrepFilter('Preparing')}
+            >
+              Preparing
+            </button>
+          </div>
+
+          {/* Quick Search if list is large */}
+          {itemsList.length > 4 && (
+            <input
+              type="text"
+              className="kpw-search-input"
+              placeholder="Search items..."
+              value={searchTerm}
+              onChange={e => setSearchTerm(e.target.value)}
+            />
+          )}
+
+          {/* Items List */}
+          {itemsList.length === 0 ? (
+            <div className="kpw-empty">
+              <span style={{ fontSize: '1.4rem' }}>✅</span>
+              <div style={{ marginTop: '4px', fontWeight: 600 }}>No items to make</div>
+              <div style={{ fontSize: '0.7rem', opacity: 0.7, marginTop: '2px' }}>
+                {prepFilter !== 'Active' ? `(No ${prepFilter} items)` : 'All orders ready or delivered'}
+              </div>
+            </div>
+          ) : (
+            <div className="kpw-item-list">
+              {itemsList.map(item => (
+                <div key={item.name} className="kpw-item-row">
+                  <div className="kpw-item-info">
+                    <span className="kpw-item-name">
+                      <FoodIcon emoji={item.emoji} size={15} /> {item.name}
+                    </span>
+                    <div className="kpw-item-breakdown">
+                      <span>{item.orderCount} order{item.orderCount > 1 ? 's' : ''}</span>
+                      {item.preparingQty > 0 && (
+                        <span style={{ color: '#ff7a1a', fontWeight: 600 }}>• {item.preparingQty} Prep</span>
+                      )}
+                      {item.pendingQty > 0 && (
+                        <span style={{ color: '#f59e0b', fontWeight: 600 }}>• {item.pendingQty} Pend</span>
+                      )}
+                    </div>
+                  </div>
+                  <span className="kpw-qty-badge">×{item.totalQty}</span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+};
+
 // ── StaffTab (main) ─────────────────────────────────────────────────────────
 const StaffTab = ({ onExit }) => {
   const currentHash = window.location.hash;
@@ -534,6 +687,9 @@ const StaffTab = ({ onExit }) => {
   // ── Main Dashboard ────────────────────────────────────────────────────────
   return (
     <section id="staff-dashboard" className="reveal visible">
+      {/* Items To Make (Kitchen Prep Summary) - Floating Right Corner Widget */}
+      <KitchenPrepWidget orders={orders} activeBranch={activeBranch} filterBranch={filterBranch} />
+
       {/* Offline Status Warning Banner */}
       {!isOnline && (
         <div style={{
