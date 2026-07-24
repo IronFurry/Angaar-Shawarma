@@ -4,10 +4,10 @@ const mongoose = require("mongoose");
 const User = require("../models/user");
 
 const BRANCHES = [
-  { branch: "Vasai Gaon Outlet (Main Branch)",             slug: "vasaigaon" },
-  { branch: "Vasai West Outlet (Angaar Shawarma 2.0)",     slug: "vasaiwest" },
-  { branch: "Nallasopara Outlet",                          slug: "nallasopara" },
-  { branch: "Virar Outlet",                               slug: "virar" },
+  { branch: "Vasai Gaon Outlet (Main Branch)", slug: "vasaigaon" },
+  { branch: "Vasai West Outlet (Angaar Shawarma 2.0)", slug: "vasaiwest" },
+  { branch: "Nallasopara Outlet", slug: "nallasopara" },
+  { branch: "Virar Outlet", slug: "virar" },
 ];
 
 // ── Generate a random fallback password if the env var isn't set ────────────
@@ -24,7 +24,7 @@ if (!process.env.SEED_OWNER_PASSWORD || !process.env.SEED_STAFF_PASSWORD) {
 }
 
 const ADMIN_USERS = [
-  { username: "owner", password: OWNER_PASSWORD, displayName: "Aryan (Owner)", role: "owner" },
+  { username: "owner", password: OWNER_PASSWORD, displayName: "ARYAN KATE (Owner)", role: "owner" },
 ];
 
 const seed = async () => {
